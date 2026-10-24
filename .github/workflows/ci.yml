@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+      - name: Install
+        run: python -m pip install --upgrade pip && python -m pip install ".[dev]"
+      - name: Tests (through an in-memory MCP client session)
+        run: python -m pytest -v
+      - name: server.json matches the package version
+        run: |
+          version="$(python -c 'import kanibal_tools_mcp; print(kanibal_tools_mcp.__version__)')"
+          test "$(jq -r .version server.json)" = "$version"
+          test "$(jq -r '.packages[0].version' server.json)" = "$version"
+          test "$(jq -r '.packages[0].identifier' server.json)" = "kanibal-tools-mcp"
+          grep -q "mcp-name: $(jq -r .name server.json) -->" README.md
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          twine check --strict dist/*

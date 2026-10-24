@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.kanibal-studio/kanibal-tools-mcp",
+  "title": "Kanibal Tools",
+  "description": "Local read-only tools: French telemarketing consent, GDPR offshore checklist, cost per kept meeting",
+  "repository": {
+    "url": "https://github.com/kanibal-studio/kanibal-tools-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "kanibal-tools-mcp",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
