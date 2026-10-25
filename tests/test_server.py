@@ -125,5 +125,49 @@ def test_model_selection_uses_the_capability_filter():
 
 
 def test_version_is_exposed_to_clients():
-    assert __version__ == "0.1.0"
+    assert __version__ == "0.1.1"
     assert mcp._mcp_server.version == __version__
+
+
+def _tools_by_name():
+    async def run():
+        async with create_connected_server_and_client_session(mcp._mcp_server) as client:
+            return {t.name: t for t in (await client.list_tools()).tools}
+
+    return asyncio.run(run())
+
+
+def test_every_parameter_is_described_and_input_formats_are_in_the_schema():
+    tools = _tools_by_name()
+    for tool in tools.values():
+        for name, prop in tool.inputSchema["properties"].items():
+            assert prop.get("description"), f"{tool.name}.{name} has no description"
+    answers = tools["gdpr_offshore_gap_report"].inputSchema["properties"]["answers"]
+    assert {"safeguards", "art28_contract", "security_controls", "tia_documented"} <= set(answers["properties"])
+    assert len(answers["properties"]["art28_contract"]["properties"]["clauses"]["properties"]) == 12
+    catalogue = tools["select_least_cost_capable_model"].inputSchema["properties"]["catalogue"]
+    assert catalogue["required"] == ["required_capabilities", "models"]
+    assert "meetings_qualified_kept" in tools["rank_lead_sources_by_kept_meeting"].inputSchema["properties"]["csv_text"]["description"]
+
+
+def test_each_description_points_away_from_its_siblings():
+    tools = _tools_by_name()
+    assert "gdpr_offshore_gap_report" in tools["check_telemarketing_consent"].description
+    assert "check_telemarketing_consent" in tools["gdpr_offshore_gap_report"].description
+    assert "does not check consent or GDPR" in tools["rank_lead_sources_by_kept_meeting"].description
+    assert "unrelated to lead sources" in tools["select_least_cost_capable_model"].description
+
+
+def test_documented_schema_does_not_coerce_a_string_true_into_compliance():
+    """The answers schema documents booleans but must not coerce "true" (fail-closed)."""
+    def tia_status(value):
+        error, payload = _call(
+            "gdpr_offshore_gap_report",
+            {"answers": {"destination_country": "Tunisia", "safeguards": ["scc"], "tia_documented": value}},
+        )
+        assert not error
+        findings = _unwrap(payload)["findings"]
+        return next(f for f in findings if f["id"] == "TRANSFER-TIA")["status"]
+
+    assert tia_status(True) == "ok"
+    assert tia_status("true") == "to_verify"
